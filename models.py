@@ -355,6 +355,19 @@ class IHRUser_Channel(CachingMixin,models.Model):
     def __str__(self):
         return "%s (%s)" % (self.name,self.channel)
 
+class IHRUser_notification(CachingMixin,models.Model):
+    user = models.ForeignKey(IHRUser, on_delete=models.CASCADE)
+    email = models.CharField(max_length=255,default=None,null=True)
+    email_notification = models.BooleanField(default=False,null=True)
+    slack_notification_id = models.CharField(max_length=255,default=None,null=True)
+    discord_notification_id = models.CharField(max_length=255,default=None,null=True)
+
+    objects = CachingManager()
+    
+    class Meta:
+        base_manager_name = 'objects' # Attribute name of CachingManager(), above
+    def __str__(self):
+        return "%s (%s) %s %s" % (self.user,self.email,self.email_notification,self.slack_notification_id)
 
 class EmailChangeRequest(models.Model):
     """

@@ -22,7 +22,9 @@ import arrow
 from email.errors import HeaderParseError
 from smtplib import SMTPException
 from django.db import transaction, IntegrityError
+from django.core.cache import cache
 from django.core.mail import send_mail
+import requests
 from .const import ConfirmationEmail, ChangePasswordEmail, StrErrors, Msg, POOL, std_response
 import redis
 conn = redis.Redis(connection_pool=POOL)
@@ -39,7 +41,9 @@ from rest_framework.status import (
     HTTP_202_ACCEPTED 
 )
 
-from .models import ASN, Country, Delay, Forwarding, Delay_alarms, Forwarding_alarms, Disco_events, Disco_probes, Hegemony, HegemonyCone, Atlas_delay, Atlas_location, Atlas_delay_alarms, Hegemony_alarms, Hegemony_country, Hegemony_prefix, Metis_atlas_selection, Metis_atlas_deployment
+from .models import ASN, Country, Delay, Forwarding, Delay_alarms, Forwarding_alarms, Disco_events, Disco_probes, Hegemony, \
+    HegemonyCone, Atlas_delay, Atlas_location, Atlas_delay_alarms, Hegemony_alarms, Hegemony_country, Hegemony_prefix, \
+    Metis_atlas_selection, Metis_atlas_deployment, IHRUser_notification
 
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -874,7 +878,7 @@ class UserSendForgetPasswordEmailView(APIView):
                 send_mail(
                         'Account activation',
                         confirmation_email.PLAIN,
-                        '1347143378@qq.com',
+                        conf_settings.EMAIL_HOST_USER,
                         [email],
                         fail_silently=False,
                         )
@@ -1091,6 +1095,154 @@ class UserGetChannelView(APIView):
             ret['code'] = HTTP_404_NOT_FOUND
             ret['msg'] = Msg.REQUEST_EXCEPTION
             return JsonResponse(ret)
+
+
+class UserEmailChannel(APIView):
+    @swagger_auto_schema(
+        operation_description="apiview post description override",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            required=['type', "content"],
+            properties={
+                # 'user': openapi.Schema(type=openapi.TYPE_STRING),
+            },
+        ),
+        security=[]
+    )
+    def post(self, request, *args, **kwargs):
+        ret = {}
+        try:
+            token = Token.objects.get(key=request.META.get("HTTP_AUTHORIZATION").split('=')[-1])
+            user_name = token.user # request.data.get('user')
+            user_notification = IHRUser_notification.objects.filter(user = user_name).first()
+            if user_notification:
+                user_notification.email_notification = True
+                user_notification.email = token.user.email
+                print(token.user.email)
+                user_notification.save()
+            else:
+                print(token.user.email)
+                print(token.user)
+                IHRUser_notification.objects.create(user = user_name, email_notification = True)
+
+            ret['code'] = HTTP_200_OK
+            ret['msg'] = Msg.SAVE_SUCCEEDED
+            return JsonResponse(ret)
+
+        except Exception as e:
+            print(e)
+            ret['code'] = HTTP_404_NOT_FOUND
+            ret['msg'] = Msg.REQUEST_EXCEPTION
+            return JsonResponse(ret)
+
+
+class UserSlackChannel(APIView):
+    @swagger_auto_schema(
+        operation_description="apiview post description override",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            required=['type', "content"],
+            properties={
+                # 'user': openapi.Schema(type=openapi.TYPE_STRING),
+            },
+        ),
+        security=[]
+    )
+    def post(self, request, *args, **kwargs):
+        ret = {}
+        try:
+            token = Token.objects.get(key=request.META.get("HTTP_AUTHORIZATION").split('=')[-1])
+            user_name = token.user # request.data.get('user')
+            code = request.data.get('code')
+            if code:
+                data = {
+                    'client_id': conf_settings.SLACK_CLIENT_ID,
+                    'client_secret': conf_settings.SLACK_CLIENT_SECRET,
+                    'code': code
+                }
+                response = requests.post('https://slack.com/api/oauth.v2.access', data=data)
+                json_response = response.json()
+                channel_id = json_response['incoming_webhook']['channel_id']
+            
+            if not channel_id:
+                ret['code'] = HTTP_404_NOT_FOUND
+                ret['msg'] = Msg.REQUEST_EXCEPTION
+                return JsonResponse(ret)
+            
+            user_notification = IHRUser_notification.objects.filter(user = user_name).first()
+            if user_notification:
+                user_notification.slack_notification_id = channel_id
+                user_notification.save()
+            else:
+                IHRUser_notification.objects.create(user = user_name, slack_notification_id = channel_id)
+
+            ret['code'] = HTTP_200_OK
+            ret['msg'] = Msg.SAVE_SUCCEEDED
+            return JsonResponse(ret)
+
+        except Exception as e:
+            print(e)
+            ret['code'] = HTTP_404_NOT_FOUND
+            ret['msg'] = Msg.REQUEST_EXCEPTION
+            return JsonResponse(ret)
+
+class UserDiscordChannel(APIView):
+    @swagger_auto_schema(
+        operation_description="apiview post description override",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            required=['type', "content"],
+            properties={
+                # 'user': openapi.Schema(type=openapi.TYPE_STRING),
+            },
+        ),
+        security=[]
+    )
+    def post(self, request, *args, **kwargs):
+        ret = {}
+        try:
+            token = Token.objects.get(key=request.META.get("HTTP_AUTHORIZATION").split('=')[-1])
+            user_name = token.user # request.data.get('user')
+            code = request.data.get('code')
+            print(code)
+            token_url = 'https://discord.com/api/oauth2/token'
+            params = {
+                'client_id': conf_settings.DISCORD_CLIENT_ID,
+                'client_secret': conf_settings.DISCORD_CLIENT_SECRET,
+                'grant_type': 'authorization_code',
+                'redirect_uri': conf_settings.DISCORD_REDIRECT_URI,
+                'code': code
+            }
+
+            # Make the POST request and get the response
+            response = requests.post(token_url, data=params)
+            response_data = response.json()
+            channel_id = response_data['guild']['system_channel_id']
+            print(channel_id)
+            if not channel_id or channel_id == 'guild':
+                ret['code'] = HTTP_404_NOT_FOUND
+                ret['msg'] = Msg.REQUEST_EXCEPTION
+                return JsonResponse(ret)
+            user_notification = IHRUser_notification.objects.filter(user = user_name).first()
+            if user_notification:
+                user_notification.discord_notification_id = channel_id
+                user_notification.save()
+            else:
+                IHRUser_notification.objects.create(user = user_name, discord_notification_id = channel_id)
+
+            ret['code'] = HTTP_200_OK
+            ret['msg'] = Msg.SAVE_SUCCEEDED
+            return JsonResponse(ret)
+        
+
+        except Exception as e:
+            print(e)
+            ret['code'] = HTTP_404_NOT_FOUND
+            ret['msg'] = Msg.REQUEST_EXCEPTION
+            return JsonResponse(ret)
+
+
+
 
 class MetisAtlasSelectionFilter(HelpfulFilterSet):
 

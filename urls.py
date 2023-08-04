@@ -26,6 +26,11 @@ exposed_api = [
 	url(r'^user/savechannel$', views.UserSaveChannelView.as_view(), name='UserSaveChannelListView'),
 	url(r'^user/getchannel$', views.UserGetChannelView.as_view(), name='UserGetChannelListView'),
 
+    url(r'^user/emailchannel$', views.UserEmailChannel.as_view(), name='UserSaveCountryListView'),
+    url(r'^user/slackchannel$', views.UserSlackChannel.as_view(), name='UserSaveCountryListView'),
+    url(r'^user/discordchannel$', views.UserDiscordChannel.as_view(), name='UserSaveDiscordListView'),
+
+
     url(r'^networks/$', views.NetworkView.as_view(), name='networkListView'),
     url(r'^countries/$', views.CountryView.as_view(), name='countryListView'),
     url(r'^link/delay/$', views.DelayView.as_view(), name='delayListView'),
