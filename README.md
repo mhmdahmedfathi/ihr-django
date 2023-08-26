@@ -24,6 +24,7 @@ sudo apt install apache2 python3 python3-pip postgresql postgresql-contrib
 Install virtualenv and django:
 ```zsh
 pip3 install virtualenv
+sudo apt install python3-virtualenv
 virtualenv ihr
 ```
 
@@ -58,6 +59,8 @@ You may have to adjust some variables in settings.py to match your database, smt
 
 install dependencies
 ```zsh
+sudo apt-get install apache2-dev
+sudo apt-get install libpq-dev
 pip install -r ihr/requirements.txt
 ```
 
@@ -93,7 +96,7 @@ Remove migration files and create tables: (TODO move production migration files 
 find . -path "*/migrations/*.py" -not -name "__init__.py" -delete
 find . -path "*/migrations/*.pyc"  -delete
 ./manage.py makemigrations
-manage.py migrate
+./manage.py migrate
 ```
 
 Start django:
@@ -246,6 +249,7 @@ psql -U django -d ihr -c "ALTER TABLE ihr_hegemony_prefix ALTER COLUMN id SET DA
 psql -U django -d ihr -c "ALTER TABLE ihr_hegemony_country ALTER COLUMN id SET DATA TYPE bigint"
 psql -U django -d ihr -c "ALTER TABLE ihr_atlas_delay ALTER COLUMN id SET DATA TYPE bigint"
 ```
+Note that if you are using dockeriozed database, you should add -h db to all psql commands.
 
 Download a database snapshot and load it:
 ```zsh
